@@ -81,6 +81,9 @@ ol li::before{content:counter(s);position:absolute;left:0;top:1px;width:27px;hei
 .cm{display:none;position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.75);align-items:center;justify-content:center;padding:16px}.cm.on{display:flex}
 .cmbox{background:var(--bg);border-radius:20px;padding:14px;max-width:640px;width:100%}.cmbox video{width:100%;max-height:60vh;background:#000;border-radius:12px;display:block;transform:scaleX(-1)}
 .cmbt{display:flex;gap:10px;justify-content:center;margin-top:12px}.cmbt button.go{padding:12px 28px}
+.spk{border:1px solid var(--acc);background:transparent;color:var(--acc);font-size:13.5px;font-weight:600;padding:6px 14px;border-radius:18px;cursor:pointer;margin:0 0 12px}.spk.on{background:var(--acc);color:#fff}
+.auto{display:flex;align-items:center;justify-content:center;gap:6px;color:var(--mut);font-size:13.5px;margin-top:12px;cursor:pointer}.auto input{flex:none;width:auto;padding:0;border:0;box-shadow:none;background:none;border-radius:0;transform:scale(1.2)}
+.nospeech .spk,.nospeech .auto{display:none}
 </style>
 </head>
 <body>
@@ -90,6 +93,7 @@ ol li::before{content:counter(s);position:absolute;left:0;top:1px;width:27px;hei
 <h1>응급<span>처치</span> 길잡이</h1>
 <p class="sub">상황을 입력하면 지금 해야 할 행동을 알려드려요</p>
 <div class="sbox"><input id="q" type="search" placeholder="예: 사탕이 목에 걸렸어요" autocomplete="off" autofocus><button class="go" id="go">검색</button></div>
+<label class="auto"><input type="checkbox" id="auto"> 결과를 자동으로 읽어주기</label>
 <div class="chips" id="chips"></div>
 <div class="camrow"><button class="cam" id="snap">📷 사진 찍기</button><button class="cam" id="pick">🖼️ 앨범에서 선택</button></div>
 <input id="snapf" type="file" accept="image/*" capture="environment" hidden>
@@ -144,8 +148,8 @@ D[27].y=["심한 갈증과 잦은 소변","피로감, 시야 흐림, 두통","�
 var $=function(i){return document.getElementById(i)};
 var chips=["목에 걸렸어요","쓰러졌어요","피가 나요","화상","코피","벌에 쏘임","뇌졸중 의심","가슴 통증","감전","저혈당","눈에 이물질","개에 물림","고혈당"];
 $("chips").innerHTML=chips.map(function(c){return '<button class="chip">'+c+'</button>'}).join("");
-function card(d,top,p){return '<div class="card'+(top?' top':'')+'"><h2>'+d.t+'</h2>'+(p!=null?'<div class="pct"><div class="bar"><i style="width:'+p+'%"></i></div><b>'+p+'%</b></div>':'')+(d.y?'<div class="sym"><b>주요 증상</b><ul>'+d.y.map(function(x){return '<li>'+x+'</li>'}).join("")+'</ul></div>':'')+'<span class="call">📞 '+d.call+'</span>'+(d.w?'<div class="warn">⚠️ '+d.w+'</div>':'')+'<ol>'+d.s.map(function(x){return '<li>'+x+'</li>'}).join("")+'</ol></div>'}
-function search(){
+function card(d,top,p){return '<div class="card'+(top?' top':'')+'"><h2>'+d.t+'</h2><button class="spk" data-i="'+D.indexOf(d)+'">🔊 음성으로 듣기</button>'+(p!=null?'<div class="pct"><div class="bar"><i style="width:'+p+'%"></i></div><b>'+p+'%</b></div>':'')+(d.y?'<div class="sym"><b>주요 증상</b><ul>'+d.y.map(function(x){return '<li>'+x+'</li>'}).join("")+'</ul></div>':'')+'<span class="call">📞 '+d.call+'</span>'+(d.w?'<div class="warn">⚠️ '+d.w+'</div>':'')+'<ol>'+d.s.map(function(x){return '<li>'+x+'</li>'}).join("")+'</ol></div>'}
+function search(){stopSpeak();
  var q=$("q").value.trim().toLowerCase();
  $("hero").classList.toggle("compact",!!q);
  if(!q){$("out").innerHTML="";return}
@@ -163,10 +167,27 @@ function search(){
  if(!res.length){$("out").innerHTML='<div class="empty">일치하는 안내를 찾지 못했어요.<br>다른 표현으로 검색하거나, 위급하면 <b>119</b>에 전화하세요.</div>';return}
  var tot=res.reduce(function(a,r){return a+r.s},0);
  $("out").innerHTML='<p class="hint">입력하신 증상과 각 응급 상황 안내의 <b>일치도</b>입니다. 의학적 진단이나 확률이 아니며, 증상이 심하면 순위와 상관없이 119에 연락하세요.</p>'+res.map(function(r,i){return card(r.d,i===0,Math.round(r.s/tot*100))}).join("");
+ if($("auto").checked){var sb=$("out").querySelector(".spk");if(sb)sb.click()}
 }
 $("go").onclick=search;
 $("q").addEventListener("keydown",function(e){if(e.key==="Enter")search()});
 $("chips").onclick=function(e){if(e.target.className==="chip"){$("q").value=e.target.textContent;search()}};
+var TTS="speechSynthesis" in window,voice=null,spkId=0;
+if(!TTS)document.documentElement.classList.add("nospeech");
+function pickVoice(){var v=speechSynthesis.getVoices().filter(function(x){return /^ko/i.test(x.lang)});voice=v[0]||null}
+if(TTS){pickVoice();speechSynthesis.onvoiceschanged=pickVoice}
+function resetSpk(){document.querySelectorAll(".spk.on").forEach(function(b){b.classList.remove("on");b.textContent="🔊 음성으로 듣기"})}
+function stopSpeak(){if(TTS){spkId++;speechSynthesis.cancel();resetSpk()}}
+function strip(s){return String(s).replace(/<[^>]+>/g,"")}
+$("out").addEventListener("click",function(e){
+ var b=e.target.closest&&e.target.closest(".spk");if(!b||!TTS)return;
+ var was=b.classList.contains("on");stopSpeak();if(was)return;
+ var d=D[+b.getAttribute("data-i")];if(!d)return;
+ var parts=[d.t,d.call];if(d.w)parts.push("주의. "+d.w);parts.push("순서대로 알려드릴게요.");
+ d.s.forEach(function(s,i){parts.push((i+1)+"번. "+strip(s))});
+ b.classList.add("on");b.textContent="⏹ 멈추기";
+ var my=++spkId;parts.forEach(function(t,i){var u=new SpeechSynthesisUtterance(t);u.lang="ko-KR";u.rate=.95;if(voice)u.voice=voice;if(i===parts.length-1){u.onend=function(){if(my===spkId)resetSpk()}}u.onerror=function(){if(i===parts.length-1&&my===spkId)resetSpk()};speechSynthesis.speak(u)});
+});
 var photoBlob=null;
 function shrink(f){return new Promise(function(ok,no){var im=new Image();im.onload=function(){var r=Math.min(1,1280/Math.max(im.width,im.height)),c=document.createElement("canvas");c.width=Math.round(im.width*r);c.height=Math.round(im.height*r);c.getContext("2d").drawImage(im,0,0,c.width,c.height);c.toBlob(function(b){b?ok(b):no()},"image/jpeg",.85)};im.onerror=no;im.src=URL.createObjectURL(f)})}
 $("pick").onclick=function(){$("file").click()};
